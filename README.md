@@ -39,21 +39,19 @@ Built and published by **[Oğuz Tonyalı](https://github.com/Zodomik)**. This re
 | Online client | URLSession WebSockets | Room and match messages for online play. |
 | Backend | TypeScript, Node.js, Express, Socket.IO, Prisma, PostgreSQL | Online room flow, scoring and persistent match data. |
 
-## Engineering highlights
+## Implementation notes
 
-### Color science in a game loop
+SwiftUI client; Express/Socket.IO service; Prisma/PostgreSQL match history; process-local rooms and matchmaking.
 
-The scoring utility converts sRGB values through XYZ into LAB, then calculates CIEDE2000 color difference. A perceptual distance maps a player’s guess to a score.
+- CIEDE2000 color distance, logarithmic pitch error and symmetry-aware shape scoring.
+- Runtime sine-wave synthesis with smoothed frequency/amplitude changes.
+- Date-seeded daily targets and per-mode score records.
 
-### Generated sound rather than a fixed clip library
-
-AVAudioEngine and a source node generate tones for pitch-matching gameplay. This allows the target and the player’s adjustment to share the same audio-generation model.
-
-### Separate game and connection state
-
-Game view models manage round progression while socket and online services handle connection and room events. Daily challenges and match history are represented separately from an active round.
-
-→ **[Explore the architecture and design decisions](docs/ENGINEERING.md)**
+| Read more | What is covered |
+| --- | --- |
+| [Architecture and frameworks](docs/ENGINEERING.md) | Runtime components, backend structure and framework responsibilities |
+| [Database and local data](docs/DATA_MODEL.md) | Entities, relationships, constraints and persistence choices |
+| [Algorithms and implementation choices](docs/ALGORITHMS.md) | Calculations, example flows and the limits of each approach |
 
 ## Try the product
 

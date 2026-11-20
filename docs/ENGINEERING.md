@@ -1,47 +1,56 @@
-# Hue · Engineering notes
+# Hue · Architecture
 
-This overview describes the product’s implementation at a component level. It accompanies the [product showcase](../README.md).
+*Implementation notes checked against the working project on 20 November 2026. Store builds may differ as the project evolves.*
 
-## Component map
+Hue has a native sensory-game client and an online service for rooms, matches and daily scores.
+
+| Layer | Technology | Responsibility |
+| --- | --- | --- |
+| iOS | Swift, SwiftUI, Combine | Round state, tactile controls, results and settings |
+| Audio | AVFoundation, AVAudioEngine, AVAudioSourceNode | Procedural tones and playback |
+| Game calculations | Foundation and app utilities | Color difference, pitch, timing and shape accuracy |
+| Local persistence | Codable JSON, UserDefaults | Round history, preferences and local statistics |
+| Transport | URLSessionWebSocketTask | Native client messaging for online play |
+| Backend | TypeScript, Node.js, Express, Socket.IO, Zod | HTTP routes, socket events, payload validation and room lifecycle |
+| Database | Prisma, PostgreSQL | Users, rooms, matches, rounds, answers and daily scores |
+| Optional integration | ioredis | Optional Redis connection hook; active room/queue state remains in process |
+| Monetization | Google Mobile Ads | Rewarded/interstitial ad integration |
 
 ```mermaid
 flowchart TD
-A[Remember a target] --> B[Recreate with tactile controls]
-B --> C[Color, sound, time or shape scoring]
-C --> D[Result and local statistics]
-E[Online lobby] --> F[WebSocket client]
-F --> G[Node.js room services]
-G --> H[PostgreSQL match data]
+    UI[SwiftUI game views] --> VM[Mode-specific view models]
+    VM --> Score[Local scoring utilities]
+    VM --> Audio[Procedural tone generator]
+    VM --> Local[UserDefaults history]
+    UI --> Online[Online game services]
+    Online --> Socket[WebSocket and Socket.IO messages]
+    Socket --> Rooms[In-memory rooms and matchmaking]
+    Rooms --> DB[(Prisma and PostgreSQL)]
+    Daily[Daily HTTP routes] --> DB
 ```
 
-The diagram emphasizes responsibilities and data flow. Platform integrations can have their own independent lifecycle.
+## Round and room state
 
-## Design decisions
+Local play separates color, sound, time and shape scoring from screen presentation. The online layer adds lobby, connection, match history and daily challenge services.
 
-### Color science in a game loop
+The server has a room store indexed by room ID and join code, plus a mode-specific matchmaking queue. Room states cover waiting, ready, in-game, finished and cancelled. Active rooms keep readiness sets, answer maps and timers in memory. Match and answer data is also recorded through Prisma for later history/statistics.
 
-The scoring utility converts sRGB values through XYZ into LAB, then calculates CIEDE2000 color difference. A perceptual distance maps a player’s guess to a score.
+This separation is important: PostgreSQL is durable history, while the current process owns live room coordination. The optional Redis connection in the entrypoint does not by itself provide shared rooms, a Socket.IO Redis adapter or distributed matchmaking.
 
-### Generated sound rather than a fixed clip library
+## Online messages and persistence
 
-AVAudioEngine and a source node generate tones for pitch-matching gameplay. This allows the target and the player’s adjustment to share the same audio-generation model.
+The service handles user initialization, room creation/join/readiness, matchmaking, answer submission, continuing a round, rematches and disconnects. Zod parses payload shape and numeric ranges. An answer map admits one answer per participant for the current round; a database uniqueness rule also identifies an answer by round and user.
 
-### Separate game and connection state
+For the general multi-mode handler, the client calculates accuracy and the server validates the submitted range, converts it into a score and records it. Describing this implementation as fully server-recomputed scoring would overstate what the active handler does.
 
-Game view models manage round progression while socket and online services handle connection and room events. Daily challenges and match history are represented separately from an active round.
+## Daily challenges
 
-## Stack reference
+Express routes get or create a daily challenge, accept daily scores and produce leaderboards. The date seeds a repeatable set of target values. Scores are stored per date, device and mode; an improved submission replaces the earlier score, while a lower one keeps the existing best.
 
-| Area | Technologies | Responsibility |
-| --- | --- | --- |
-| iOS | Swift, SwiftUI, Combine | Game screens, reactive state and tactile controls. |
-| Color scoring | CIE LAB, CIEDE2000 | Perceptual color difference rather than raw RGB distance. |
-| Sound | AVFoundation, AVAudioEngine | Procedural tone generation and audio playback. |
-| Online client | URLSession WebSockets | Room and match messages for online play. |
-| Backend | TypeScript, Node.js, Express, Socket.IO, Prisma, PostgreSQL | Online room flow, scoring and persistent match data. |
+The schema uses an index on date, mode and score for leaderboard queries. Local preferences and offline round statistics remain independent of that online score table.
 
-## Scope
+## Code landmarks
 
-The technology summary was checked against the application’s Swift imports, project configuration and relevant service/model implementations. Backend technologies, where listed, were checked against the associated package manifest and database schema. Store screenshots illustrate the released product; the private working project may continue evolving after release.
+`GameViewModel`, `ColorScience`, `SoundScoringUtility`, `ShapeScoring`, `ToneGenerator`, `SocketManager`, `RoomStore`, `MatchmakingQueue`, socket handlers and daily routes.
 
-This documentation publishes no credentials, deployment configuration, private endpoints or application source. Product behavior and supported devices are described in the [current App Store listing](https://apps.apple.com/us/app/hue-dialed-color-match-game/id6770094040).
+**Continue:** [Data model](DATA_MODEL.md) · [Algorithms](ALGORITHMS.md) · [Product](../README.md)
